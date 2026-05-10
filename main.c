@@ -5,17 +5,6 @@
 #include<direct.h>
 #include"myToken.h"
 int main(){
-	/*int weight[256]={0};
-	char s[120];
-	scanf("%s",s);
-	countChar(s,weight);
-	char* code[256]={0};
-	RETcode(weight,code);
-	for(int i=0;i<256;i++){
-		if(code[i])printf("%d ",i);
-		puts(code[i]);
-	}
-	writeFile("out.huf",code,s,weight);*/
 	char path[MAX_PATH];
 	char cmd[100];
 	#define CMDLINE_MAX 4096
@@ -38,7 +27,7 @@ int main(){
 		while(*p==' '||*p=='\t'){//\t->tab
 			p++;
 		}
-		if(*p=='\0')continue;//写的时候漏了个=，导致总是输出原目录
+		if(*p=='\0')continue;
 		int n=sscanf(p,"%99s %4095[^\n]",cmd,arg);
 		if(n<1){//[^\n]读取直到遇到\n
 			continue;
@@ -48,12 +37,12 @@ int main(){
 		}
 		if(_stricmp(cmd,"cd")==0){
 			if(n<2)continue;
-			if(SetCurrentDirectoryA(arg)){//设置当前工作目录
+			if(SetCurrentDirectoryA(arg)){
 				if(_getcwd(path,MAX_PATH)==NULL){
 					puts("无法获取当前目录");
 				}
 			}else{
-				DWORD error=GetLastError();//错误处理，错误处理这部分是AI写的
+				DWORD error=GetLastError();
 				printf("无法切换到目录 \"%s\"。错误码: %lu\n", arg, error);
 				if(error==ERROR_FILE_NOT_FOUND){
 					printf("原因：目录不存在。\n");
@@ -71,7 +60,7 @@ int main(){
 			if(!GetConsoleScreenBufferInfo(hConsole,&CSBI)){
 				continue;
 			}
-			DWORD cells=CSBI.dwSize.X*CSBI.dwSize.Y;//unsigned int
+			DWORD cells=CSBI.dwSize.X*CSBI.dwSize.Y;
 			COORD startCoord={0,0};
 			DWORD written;
 			FillConsoleOutputCharacter(hConsole,' ',cells,startCoord,&written);
@@ -94,34 +83,11 @@ int main(){
 				puts("");
 			}while(FindNextFile(hFind,&findData));
 			FindClose(hFind);
-		}else if(_stricmp(cmd,"lzpack")==0){
-			char outfile[MAX_PATH];
-			char remaining[CMDLINE_MAX];
-			if(sscanf(arg,"%s %[^\n]",outfile,remaining)<1){
-				printf("错误，无法解析输出文件名\n");
-				continue;
-			}
-			FILE* f=fopen(outfile,"wb");
-			if(f){
-				fclose(f);
-			}else{
-				printf("错误，无法创建输出文件\n");
-				continue;
-			}
-			char* token=strtok(remaining,";");
-			int success=0,fail=0;
-			while(token!=NULL){
-				while(*token==' '||*token=='\t')token++;
-				char* end=token+strlen(token)-1;
-				while(end>token&&(*end==' '||*end=='\t'))end--;
-				1[end]='\0';//整活
-				if(strlen(token)==0){
-					token=strtok(NULL,";");
-					continue;
-				}
-				token=strtok(NULL,";");
-			}
-			printf("打包完成，成功%d个，失败%d个\n",success,fail);
+		}else if(_stricmp(cmd,"format")==0){
+			if(n<2)continue;
+			char path1[MAX_PATH];
+			sscanf(arg,"%s",path1);
+			formatting(path1);
 		}
 	}
 }
