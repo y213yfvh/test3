@@ -174,35 +174,52 @@ int readLineComment(FILE* rfp,int* pch,token* tok){
 	return 0;
 }
 int readBlockComment(FILE* rfp,int* pch,token* tok){
-	SAFE_PUSH(tok,'/');
-	SAFE_PUSH(tok,'*');
-	nextChar(rfp,pch);
-	while(pch[0]!='\n'&&pch[0]!=EOF){
-		if(pch[0]=='*'){
-			SAFE_PUSH_NEXT(tok,pch[0]);
-			if(pch[0]=='/'){
-				SAFE_PUSH_NEXT(tok,pch[0]);
-			}
-		}else{
-			SAFE_PUSH_NEXT(tok,pch[0]);
-		}
-	}
-	tok->T=TOKEN_COMMENT;
-	return 0;
+    SAFE_PUSH(tok,'/');
+    SAFE_PUSH(tok,'*');
+    nextChar(rfp,pch);
+    int close=0;
+    while(!close&&*pch!=EOF){
+        if(*pch=='*'){
+            SAFE_PUSH_NEXT(tok,*pch);
+            if(*pch=='/'){
+                SAFE_PUSH_NEXT(tok,*pch);
+                close=1;
+            }
+        }else{
+            SAFE_PUSH_NEXT(tok,*pch);
+        }
+    }
+    tok->T=TOKEN_COMMENT;
+    return 0;
 }
 int readPreprocessor(FILE* rfp,int* pch,token* tok){
-	while(pch[0]!=EOF&&pch[0]!='\n'){
-		if(pch[0]=='\\'){
-			SAFE_PUSH_NEXT(tok,pch[0]);
-			if(pch[0]=='\n'){
-				SAFE_PUSH_NEXT(tok,pch[0]);
-			}
-		}else{
-			SAFE_PUSH_NEXT(tok,pch[0]);
-		}
-	}
-	tok->T=TOKEN_PREPROC;
-	return 0;
+    while(*pch!=EOF&&*pch!='\n'){
+        if(*pch=='\r'){
+            nextChar(rfp,pch);
+            continue;
+        }
+        if(*pch=='\\'){
+            if(pushToken(tok,'\\')!=0){
+                tok->T=TOKEN_ERR;
+                return 1;
+            }
+            nextChar(rfp,pch);
+            if(*pch=='\r'){
+                nextChar(rfp,pch);
+            }
+            if(*pch=='\n'){
+                if(pushToken(tok,'\n')!=0){
+                    tok->T=TOKEN_ERR;
+                    return 2;
+                }
+                nextChar(rfp,pch);
+            }
+        }else{
+            SAFE_PUSH_NEXT(tok,*pch);
+        }
+    }
+    tok->T=TOKEN_PREPROC;
+    return 0;
 }
 int readOperator(FILE* rfp,int* pch,token* tok){
 	char first=pch[0];
@@ -289,16 +306,6 @@ int getToken(FILE* rfp,int* pch,token* tok){
 			ret=pushToken(tok,'}');
 			nextChar(rfp,pch);
 			return ret;
-		case '(':
-			tok->T=TOKEN_LPAREN;
-			ret=pushToken(tok,'(');
-			nextChar(rfp,pch);
-			return ret;
-		case ')':
-			tok->T=TOKEN_RPAREN;
-			ret=pushToken(tok,')');
-			nextChar(rfp,pch);
-			return ret;
 		case '[':
 			tok->T=TOKEN_LBRACKET;
 			ret=pushToken(tok,'[');
@@ -350,23 +357,41 @@ int getToken(FILE* rfp,int* pch,token* tok){
 	}
 	return 0;
 }
-int needSpaceBefore(token* prev,token* cur){
-    if(prev==NULL||cur==NULL)return 0;
+/*int needSpaceBefore(token* prev,token* cur){
+	if(prev==NULL||cur==NULL)return 0;
+	if(prev->T==TOKEN_LPAREN||prev->T==TOKEN_LBRACKET)
+		return 0;
+	if(cur->T==TOKEN_RPAREN||cur->T==TOKEN_RBRACKET)
+		return 0;
+	if(prev->T==TOKEN_OPERATOR&&
+	    (strcmp(cur->text,"!")==0||
+	    strcmp(cur->text,"~")==0||
+	    strcmp(cur->text,"++")==0||
+	    strcmp(cur->text,"--")==0))
+	    return 0;
+	if(cur->T==TOKEN_OPERATOR&&
+	    (strcmp(cur->text,"!")==0||
+	    strcmp(cur->text,"~")==0||
+	    strcmp(cur->text,"++")==0||
+	    strcmp(cur->text,"--")==0))
+	    return 0;
+	if(prev->T==TOKEN_LPAREN||prev->T==TOKEN_LBRACKET)
+	    return 0;
+	if(cur->T==TOKEN_LPAREN){
+		if(prev->T==TOKEN_WORD&&
+			(strcmp(prev->text,"if")== 0||
+		        strcmp(prev->text,"while")==0||
+		        strcmp(prev->text,"for") == 0||
+		        strcmp(prev->text,"switch")== 0||
+		        strcmp(prev->text,"return")==0))
+		    return 1;
+		return 0;
+	}
     if(cur->T==TOKEN_COMMENT)return 0;
     if(cur->T==TOKEN_PREPROC)return 0;
     if(prev->T==TOKEN_COMMENT)return 0;
     if(prev->T==TOKEN_PREPROC)return 0;
     if(prev->T==TOKEN_COMMA)return 1;
-    if(cur->T==TOKEN_LPAREN){
-        if(prev->T==TOKEN_WORD&&
-            (strcmp(prev->text,"if")==0||
-             strcmp(prev->text,"while")==0||
-             strcmp(prev->text,"for")==0||
-             strcmp(prev->text,"switch")==0||
-             strcmp(prev->text,"return")==0))
-            return 1;
-        return 0;
-    }
     if(prev->T==TOKEN_RPAREN&&
         (cur->T==TOKEN_LBRACE||cur->T==TOKEN_WORD))
         return 1;
@@ -378,6 +403,66 @@ int needSpaceBefore(token* prev,token* cur){
         return 1;
     if(prev->T==TOKEN_WORD&&cur->T==TOKEN_WORD)
 	    return 1;
+	if(prev->T==TOKEN_WORD&&cur->T==TOKEN_NUMBER)
+	return 1;
+	if(prev->T==TOKEN_NUMBER&&cur->T==TOKEN_WORD)
+	return 1;
+    return 0;
+}*/
+int needSpaceBefore(token* prev, token* cur) {
+    if (!prev || !cur) return 0;
+
+    // 1. 左括号之后永远不要空格
+    if (prev->T == TOKEN_LPAREN  || prev->T == TOKEN_LBRACKET) return 0;
+
+    // 2. 右括号之前永远不要空格
+    if (cur->T == TOKEN_RPAREN  || cur->T == TOKEN_RBRACKET) return 0;
+
+    // 3. 分号、逗号、冒号之前不要空格（紧跟前面内容）
+    if (cur->T == TOKEN_SEMICOLON || cur->T == TOKEN_COMMA || cur->T == TOKEN_COLON) return 0;
+
+    // 4. 一元运算符与其操作数之间不加空格
+    if (prev->T == TOKEN_OPERATOR &&
+        (strcmp(prev->text,"!")==0 || strcmp(prev->text,"~")==0 ||
+         strcmp(prev->text,"++")==0|| strcmp(prev->text,"--")==0))
+        return 0;
+    if (cur->T == TOKEN_OPERATOR &&
+        (strcmp(cur->text,"!")==0 || strcmp(cur->text,"~")==0 ||
+         strcmp(cur->text,"++")==0|| strcmp(cur->text,"--")==0))
+        return 0;
+
+    // 5. 点运算符 . 和 -> 前后都不加空格
+    if (cur->T == TOKEN_DOT || prev->T == TOKEN_DOT) return 0;
+
+    // 6. 关键字后的 '(' 前加空格
+    if (cur->T == TOKEN_LPAREN && prev->T == TOKEN_WORD) {
+        if (strcmp(prev->text,"if")==0 || strcmp(prev->text,"while")==0 ||
+            strcmp(prev->text,"for")==0 || strcmp(prev->text,"switch")==0 ||
+            strcmp(prev->text,"return")==0)
+            return 1;
+        return 0;   // 普通函数/宏调用 '(' 前不加空格
+    }
+
+    // 7. 逗号、右括号之后一般要加空格（例外：后跟 ';' 已在上面拦截）
+    if (prev->T == TOKEN_COMMA) return 1;
+    if (prev->T == TOKEN_RPAREN) {
+        if (cur->T == TOKEN_LBRACE || cur->T == TOKEN_WORD || cur->T == TOKEN_OPERATOR)
+            return 1;
+        return 0;
+    }
+
+    // 8. 预处理指令、注释附近不加多余空格（按原先逻辑保留）
+    if (cur->T == TOKEN_COMMENT || cur->T == TOKEN_PREPROC) return 0;
+    if (prev->T == TOKEN_COMMENT || prev->T == TOKEN_PREPROC) return 0;
+
+    // 9. 二元/普通运算符两侧加空格
+    if (cur->T == TOKEN_OPERATOR || prev->T == TOKEN_OPERATOR) return 1;
+
+    // 10. 相邻标识符或标识符与数字之间加空格
+    if (prev->T == TOKEN_WORD && cur->T == TOKEN_WORD) return 1;
+    if (prev->T == TOKEN_WORD && cur->T == TOKEN_NUMBER) return 1;
+    if (prev->T == TOKEN_NUMBER && cur->T == TOKEN_WORD) return 1;
+
     return 0;
 }
 int formatting(char* rFileName){
@@ -396,7 +481,10 @@ int formatting(char* rFileName){
 		return 4;
 	}
 	int currentChar='\0';
+	nextChar(rfp,&currentChar);
+	int nonBlockBraceCount=0;
 	int indentLv=0;
+	int parenDepth=0;
 	int beginOfLine=1;
 	token* prev=NULL;
 	token* cur=newToken();
@@ -428,10 +516,11 @@ int formatting(char* rFileName){
 		    if(cur->len>0&&cur->text[cur->len-1]=='\n')
 		        beginOfLine=1;
 		    else{
-		        beginOfLine=0;
-		        freeToken(prev);
-				prev=cur;
+		    	fputc('\n',wfp);
+		        beginOfLine=1;
 			}
+			freeToken(prev);
+			prev=cur;
 		    cur=newToken();
 			getToken(rfp,pch,cur);
 		    continue;
@@ -439,27 +528,72 @@ int formatting(char* rFileName){
 		if(!beginOfLine&&needSpaceBefore(prev,cur))
 		    fputc(' ', wfp);
 		if(cur->T==TOKEN_LBRACE){
-		    if(!beginOfLine)fputc('\n',wfp);
-		    for(int i=0;i<indentLv*4;i++)
-				fputc(' ',wfp);
-		    fputs("{",wfp);
-		    indentLv++;
-		    fputc('\n',wfp);
-		    beginOfLine=1;
+		    int isBlock=1;
+		    if(prev){
+		        if(prev->T==TOKEN_OPERATOR&&strcmp(prev->text,"=")==0)
+		            isBlock=0;
+		        else if(prev->T==TOKEN_COMMA)
+		            isBlock=0;
+		        else if(prev->T==TOKEN_LPAREN)
+		            isBlock=0;
+		    }
+		    if(isBlock){
+		        if(!beginOfLine)fputc('\n',wfp);
+		        for(int i=0;i<indentLv*4;i++)fputc(' ',wfp);
+		        fputs("{",wfp);
+		        indentLv++;
+		        fputc('\n',wfp);
+		        beginOfLine=1;
+		    }else{
+		        nonBlockBraceCount++;
+		        if(beginOfLine){
+		            for(int i=0;i<indentLv*4;i++)fputc(' ',wfp);
+		            beginOfLine=0;
+		        }
+		        fputs("{",wfp);
+		    }
 		}
 		else if(cur->T==TOKEN_RBRACE){
-		    indentLv--;
-		    if(!beginOfLine)fputc('\n',wfp);
-		    for(int i=0;i<indentLv*4;i++)
-				fputc(' ', wfp);
-		    fputs("}",wfp);
-		    fputc('\n',wfp);
-		    beginOfLine=1;
+		    if(nonBlockBraceCount>0){
+		        nonBlockBraceCount--;
+		        if(beginOfLine){
+		            for(int i=0;i<indentLv*4;i++)fputc(' ',wfp);
+		            beginOfLine=0;
+		        }
+		        fputs("}",wfp);
+		    }else{
+		        indentLv--;
+		        if(!beginOfLine)fputc('\n',wfp);
+		        for(int i=0;i<indentLv*4;i++)fputc(' ',wfp);
+		        fputs("}",wfp);
+		        fputc('\n',wfp);
+		        beginOfLine=1;
+		    }
+		}
+		else if(cur->T==TOKEN_LPAREN){
+		    if(beginOfLine){
+		        for(int i=0;i<indentLv*4;i++)
+					fputc(' ', wfp);
+		        beginOfLine=0;
+		    }
+		    fputs("(",wfp);
+		    parenDepth++;
+		}
+		else if(cur->T==TOKEN_RPAREN){
+		    if(beginOfLine){
+		        for(int i=0;i<indentLv*4;i++)
+					fputc(' ',wfp);
+		        beginOfLine=0;
+		    }
+		    fputs(")",wfp);
+		    parenDepth--;
 		}
 		else if(cur->T == TOKEN_SEMICOLON){
 		    fputs(";",wfp);
-		    fputc('\n',wfp);
-		    beginOfLine=1;
+		    if(parenDepth==0){
+				fputc('\n',wfp);
+			    beginOfLine=1;
+			}
 		}
 		else{
 		    if(beginOfLine){
