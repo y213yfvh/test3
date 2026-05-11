@@ -98,6 +98,14 @@ int main(){
 			char path1[MAX_PATH];
 			sscanf(arg,"%s",path1);
 			formatting(path1,0,1);
+		}else if(strcmp(cmd,"?")==0){
+			printf("cd <目录>                      切换工作目录\n");
+			printf("exit / quit                    退出程序\n");
+			printf("cls                            清空屏幕\n");
+			printf("dir                            列出当前目录内容，.是自身，..是上一级目录\n");
+			printf("format0                        格式化代码，{不独占一行\n");
+			printf("format1                        格式化代码，{独占一行\n");
+			printf("format2                        格式化代码，紧凑\n");
 		}
 	}
 }
