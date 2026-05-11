@@ -4,6 +4,7 @@
 #include<stdio.h>
 #include<string.h>
 #include<ctype.h>
+#include<windows.h>
 #define SAFE_PUSH_NEXT(tok,ch) do{\
 	int ret=pushToken(tok,ch);\
 	if(ret==1){\
@@ -381,30 +382,44 @@ int getToken(FILE*rfp,int*pch,token*tok){
 int needSpaceBefore(token*prev,token*cur,int compact){
     if(!prev||!cur)return 0;
     if(compact){
+         // 【紧凑模式】仅在相邻的标识符/数字之间加空格
         if(prev->T==TOKEN_WORD&&cur->T==TOKEN_WORD)return 1;
         if(prev->T==TOKEN_WORD&&cur->T==TOKEN_NUMBER)return 1;
         if(prev->T==TOKEN_NUMBER&&cur->T==TOKEN_WORD)return 1;
+         // 行内注释前面加一个空格，保持可读性（如 TOKEN_LBRACE, //{）
         if(cur->T==TOKEN_COMMENT)return 1;
+         // 其他任何地方都不加空格
         return 0;
     }
+     // 1. 左括号之后永远不要空格
     if(prev->T==TOKEN_LPAREN||prev->T==TOKEN_LBRACKET)return 0;
+     // 2. 右括号之前永远不要空格
     if(cur->T==TOKEN_RPAREN||cur->T==TOKEN_RBRACKET)return 0;
+     // 3. 分号、逗号、冒号之前不要空格（紧跟前面内容）
     if(cur->T==TOKEN_SEMICOLON||cur->T==TOKEN_COMMA||cur->T==TOKEN_COLON)return 0;
+     // 4. 一元运算符与其操作数之间不加空格
     if(prev->T==TOKEN_OPERATOR&&(strcmp(prev->text,"!")==0||strcmp(prev->text,"~")==0||strcmp(prev->text,"++")==0||strcmp(prev->text,"--")==0))return 0;
     if(cur->T==TOKEN_OPERATOR&&(strcmp(cur->text,"!")==0||strcmp(cur->text,"~")==0||strcmp(cur->text,"++")==0||strcmp(cur->text,"--")==0))return 0;
+     // 5. 点运算符 . 和 -> 前后都不加空格
     if(cur->T==TOKEN_DOT||prev->T==TOKEN_DOT)return 0;
+     // 6. 关键字后的 '(' 前加空格
     if(cur->T==TOKEN_LPAREN&&prev->T==TOKEN_WORD){
         if(strcmp(prev->text,"if")==0||strcmp(prev->text,"while")==0||strcmp(prev->text,"for")==0||strcmp(prev->text,"switch")==0||strcmp(prev->text,"return")==0)return 1;
         return 0;
+         // 普通函数/宏调用 '(' 前不加空格
     }
+     // 7. 逗号、右括号之后一般要加空格（例外：后跟 ';' 已在上面拦截）
     if(prev->T==TOKEN_COMMA)return 1;
     if(prev->T==TOKEN_RPAREN){
         if(cur->T==TOKEN_LBRACE||cur->T==TOKEN_WORD||cur->T==TOKEN_OPERATOR)return 1;
         return 0;
     }
+     // 8. 预处理指令、注释附近不加多余空格（按原先逻辑保留）
     if(cur->T==TOKEN_COMMENT||cur->T==TOKEN_PREPROC)return 0;
     if(prev->T==TOKEN_COMMENT||prev->T==TOKEN_PREPROC)return 0;
+     // 9. 二元/普通运算符两侧加空格
     if(cur->T==TOKEN_OPERATOR||prev->T==TOKEN_OPERATOR)return 1;
+     // 10. 相邻标识符或标识符与数字之间加空格
     if(prev->T==TOKEN_WORD&&cur->T==TOKEN_WORD)return 1;
     if(prev->T==TOKEN_WORD&&cur->T==TOKEN_NUMBER)return 1;
     if(prev->T==TOKEN_NUMBER&&cur->T==TOKEN_WORD)return 1;
@@ -566,6 +581,26 @@ int formatting(char*rFileName,int braceOneNewLine,int compact){
     freeToken(cur);
     fclose(wfp);
     fclose(rfp);
+#ifdef _WIN32
+    char bakName[512];
+    snprintf(bakName,sizeof(bakName),"%s.bak",rFileName);
+    DeleteFileA(bakName);
+    if(!MoveFileA(rFileName,bakName)){
+        fprintf(stderr,"无法备份原文件\n");
+        return 5;
+    }
+    if(!MoveFileExA(wFileName,rFileName,MOVEFILE_REPLACE_EXISTING)){
+        fprintf(stderr,"替换失败，备份为 %s，新文件为 %s\n",bakName,wFileName);
+        return 6;
+    }
+     // 成功，可以选择删除备份
+     // DeleteFileA(bakName);
+#else
+    if(rename(wFileName,rFileName)!=0){
+        perror("rename");
+        return 5;
+    }
+#endif
     return 0;
 }
 #endif
