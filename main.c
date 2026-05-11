@@ -83,11 +83,21 @@ int main(){
 				puts("");
 			}while(FindNextFile(hFind,&findData));
 			FindClose(hFind);
-		}else if(_stricmp(cmd,"format")==0){
+		}else if(_stricmp(cmd,"format0")==0){
 			if(n<2)continue;
 			char path1[MAX_PATH];
 			sscanf(arg,"%s",path1);
-			formatting(path1);
+			formatting(path1,0,0);
+		}else if(_stricmp(cmd,"format1")==0){
+			if(n<2)continue;
+			char path1[MAX_PATH];
+			sscanf(arg,"%s",path1);
+			formatting(path1,1,0);
+		}else if(_stricmp(cmd,"format2")==0){
+			if(n<2)continue;
+			char path1[MAX_PATH];
+			sscanf(arg,"%s",path1);
+			formatting(path1,0,1);
 		}
 	}
 }
